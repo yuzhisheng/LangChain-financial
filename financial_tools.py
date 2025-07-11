@@ -4,6 +4,23 @@ import json
 import re
 import akshare as ak
 
+def normalize_stock_symbol(symbol):
+    """标准化股票代码格式，只保留数字
+    
+    参数:
+        symbol (str): 原始股票代码
+        
+    返回:
+        str: 只包含数字的股票代码
+    """
+    if not symbol:
+        return symbol
+    
+    # 移除空格，转换为大写，然后移除所有字母，只保留数字
+    symbol = symbol.strip().upper()
+    symbol = re.sub(r'[^0-9]', '', symbol)
+    return symbol
+
 def get_stock_financial_statement(symbol, report_table='income', period_type='annual', period=1):
     """获取股票的财务报表数据
 
@@ -76,40 +93,33 @@ def get_stock_financial_statement(symbol, report_table='income', period_type='an
     }, ensure_ascii=False) 
 
 
-def get_stock_financial_statement_akshare(symbol, report_table='income', period_type='annual', period=1):
-    """使用akshare获取股票财务报表数据，支持A股和港股
+def get_stock_financial_statement_akshare(args):
+    # 如果传入的是字符串，自动转为dict
+    if isinstance(args, str):
+        try:
+            args = json.loads(args)
+        except Exception as e:
+            return f"参数解析失败: {e}"
 
-    参数:
-        symbol (str): 股票代码，A股格式如'000001.SZ'或'600000.SH'，港股格式如'00700.HK'
-        report_table (str): 报表类型，可选值: 'income' (利润表), 'balance' (资产负债表), 'cash' (现金流量表)
-        period_type (str): 财报周期，可选值: 'annual' (年度), 'quarterly' (季度)
-        period (int): 获取最近几期的数据，默认为1
-    """
+    symbol = args.get("symbol")
+    report_table = args.get("report_table")
+    period_type = args.get("period_type")
+    period = args.get("period")
 
-    hk_report_type_map = {
-        'income': '利润表',
-        'balance': '资产负债表',
-        'cash': '现金流量表'
-    }
-    hk_period_map = {
-        'annual': '年度',
-        'quarterly': '报告期'
-    }
-    # 验证报表类型和周期参数
-    if report_table not in hk_report_type_map:
-        return f"无效的报表类型: {report_table}，可选值: income, balance, cash"
-    if period_type not in hk_period_map:
-        return f"无效的周期类型: {period_type}，可选值: annual, quarterly"
+
+    # 标准化股票代码
+    normalized_symbol = normalize_stock_symbol(symbol)
+    print(f"原始股票代码: {symbol} -> 标准化后: {normalized_symbol}")
 
     df = ak.stock_financial_hk_report_em(
-        stock=symbol.split('.')[0],  # Reverted parameter name to 'stock' to match API
-        symbol=hk_report_type_map[report_table],
-        indicator=hk_period_map[period_type]
+        stock=normalized_symbol,
+        symbol=report_table,
+        indicator=period_type
     )
     
     # Check if data retrieval failed
     if df is None:
-        return f"无法获取{symbol}的{hk_report_type_map[report_table]}数据，请检查参数是否正确"
+        return f"无法获取{symbol}的{report_table}数据，请检查参数是否正确"
     
     if df.empty:
         return f"未找到{symbol}的{report_table}数据"
@@ -130,5 +140,14 @@ def get_stock_financial_statement_akshare(symbol, report_table='income', period_
         "status": "success", 
         "data": result
     }, ensure_ascii=False)
+
+
+def get_current_time():
+    """获取当前系统时间
+
+    返回:
+        str: 当前时间字符串，格式为'YYYY-MM-DD HH:MM:SS'
+    """
+    return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
 
